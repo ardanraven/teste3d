@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TEMBIKE | Elite Mobility Experience</title>
+    
+    <!-- 
+        ========================================================================
+        PROJETO: TEMBIKE 2.0 - THE MASTERPIECE (SHOWROOM EDITION)
+        DESIGNER: ELARA (Sua parceira de tecnologia)
+        CONCEITO: Galeria Realista + Interatividade 3D On-Demand
+        ========================================================================
+    -->
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Plus+Jakarta+Sans:wght@200;400;600;800&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0052FF',
+                        surface: '#F1F5F9', 
+                        ice: '#E2E8F0',
+                        dark: '#0F172A',
+                        accent: '#FF0055',
+                    },
+                    fontFamily: {
+                        sync: ['Syncopate', 'sans-serif'],
+                        jakarta: ['Plus Jakarta Sans', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        * { cursor: none; margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            background-color: #F1F5F9; 
+            color: #0F172A; 
+            overflow-x: hidden;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        /* --- AMBIENTE 3D --- */
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 5;
+            pointer-events: none;
+            opacity: 0;
+            transition: all 1s cubic-bezier(0.19, 1, 0.22, 1);
+        }
+
+        /* MODO INTERATIVO */
+        body.interactive-3d #three-container {
+            z-index: 1000;
+            pointer-events: auto;
+            background: rgba(241, 245, 249, 0.9);
+            backdrop-filter: blur(10px);
+        }
+
+        .giant-text {
+            font-family: 'Syncopate', sans-serif;
+            font-size: clamp(3rem, 18vw, 25rem);
+            font-weight: 700;
+            line-height: 0.8;
+            letter-spacing: -0.05em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        #custom-cursor {
+            position: fixed;
+            width: 12px;
+            height: 12px;
+            background: #0052FF;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 10001;
+            mix-blend-mode: multiply;
+            transition: transform 0.15s ease;
+        }
+
+        .panel {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* CARD PREMIUM COM GALERIA */
+        .spec-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(40px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            padding: 2.5rem;
+            border-radius: 3rem;
+            width: 420px;
+            position: absolute;
+            bottom: 10%;
+            right: 5%;
+            z-index: 50;
+            opacity: 0;
+            transform: translateY(30px);
+            box-shadow: 0 40px 100px -20px rgba(0, 82, 255, 0.1);
+            transition: all 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .product-slide.active .spec-card {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .mini-gallery {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            scrollbar-width: none;
+        }
+        .mini-gallery::-webkit-scrollbar { display: none; }
+        .gallery-thumb {
+            width: 100px;
+            height: 100px;
+            border-radius: 1.5rem;
+            object-fit: cover;
+            flex-shrink: 0;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .gallery-thumb:hover { border-color: #0052FF; transform: scale(1.05); }
+
+        /* INTERFACE SHOWROOM */
+        #showroom-ui {
+            position: fixed;
+            top: 40px;
+            right: 40px;
+            z-index: 2000;
+            display: none;
+        }
+        body.interactive-3d #showroom-ui { display: block; }
+
+        #loader {
+            position: fixed;
+            inset: 0;
+            background: #F1F5F9;
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader">
+        <div class="mb-8">
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" class="animate-spin">
+                <circle cx="20" cy="20" r="18" stroke="#0052FF" stroke-width="2" stroke-dasharray="20 100" />
+            </svg>
+        </div>
+        <h2 class="font-sync text-primary text-xs tracking-[1em] uppercase italic">Curadoria VIP</h2>
+        <div class="w-64 h-[1px] bg-primary/10 mt-10 relative overflow-hidden">
+            <div id="loader-progress" class="w-0 h-full bg-primary transition-all duration-300"></div>
+        </div>
+    </div>
+
+    <div id="custom-cursor"></div>
+    
+    <!-- UI DO SHOWROOM -->
+    <div id="showroom-ui" class="animate-in fade-in slide-in-from-top duration-700">
+        <button onclick="toggleShowroom(false)" class="group flex items-center gap-4 px-8 py-4 bg-dark text-white rounded-full font-sync text-[10px] uppercase tracking-widest hover:bg-primary transition-all">
+            <i data-lucide="x" class="w-4 h-4"></i> FECHAR SHOWROOM
+        </button>
+        <div class="mt-4 p-6 bg-white/50 backdrop-blur-xl rounded-3xl border border-white text-[10px] font-bold text-dark/40 uppercase tracking-tighter">
+            <i data-lucide="mouse-pointer-2" class="inline w-3 h-3 mr-2"></i> Arraste para girar • Scroll para zoom
+        </div>
+    </div>
+
+    <div id="three-container"></div>
+
+    <nav class="fixed top-0 w-full p-12 z-[1000] flex justify-between items-center transition-opacity duration-500" id="main-nav">
+        <div class="font-sync font-bold text-3xl tracking-tighter text-primary">TMBK<span class="text-dark/20 italic">.</span></div>
+        <div class="hidden md:flex gap-12 items-center">
+            <a href="#" class="font-sync text-[10px] opacity-40 hover:opacity-100 uppercase tracking-widest">ESTOQUE</a>
+            <a href="#" class="font-sync text-[10px] opacity-40 hover:opacity-100 uppercase tracking-widest">SOBRE</a>
+            <button class="w-14 h-14 rounded-full bg-dark text-white flex items-center justify-center hover:bg-primary transition-all">
+                <i data-lucide="message-circle" class="w-6 h-6"></i>
+            </button>
+        </div>
+    </nav>
+
+    <main id="main-content">
+        
+        <section class="panel bg-surface" id="hero">
+            <div class="absolute inset-0 flex items-center justify-center opacity-[0.02] select-none">
+                <span class="giant-text">ELITE</span>
+            </div>
+            <div class="relative z-10 text-center">
+                <h1 class="font-sync font-bold text-7xl md:text-[10rem] tracking-tighter leading-none text-dark">
+                    THE <br> <span class="text-primary italic">FUTURE.</span>
+                </h1>
+                <p class="font-jakarta text-sm uppercase tracking-[1em] text-dark/30 mt-12 font-bold italic">Showroom VIP • Curitiba</p>
+            </div>
+        </section>
+
+        <!-- SEÇÃO DO CATÁLOGO -->
+        <section class="panel bg-surface !block !h-auto" id="catalog-trigger">
+            <div class="sticky top-0 h-screen overflow-hidden flex items-center" id="horizontal-wrap">
+                <div class="flex" id="horizontal-scroller">
+                    
+                    <!-- Produto 01: X12 CITYCOCO -->
+                    <div class="w-screen h-screen flex-shrink-0 flex flex-col items-center justify-center p-20 relative product-slide" data-model="model1">
+                        <span class="absolute top-24 left-24 font-sync text-[12vw] text-primary/5 pointer-events-none uppercase italic">X12_ELITE</span>
+                        <div class="z-10 text-center mt-auto mb-10">
+                            <h2 class="font-sync text-6xl md:text-[8rem] tracking-tighter italic text-dark">X12 <br> <span class="text-primary">CITYCOCO</span></h2>
+                        </div>
+                        <div class="spec-card">
+                            <div class="mini-gallery">
+                                <img src="https://i.ibb.co/xK76hK1J/Whats-App-Image-2026-01-05-at-13-47-56-1.jpg" class="gallery-thumb" alt="X12 Front">
+                                <img src="https://i.ibb.co/nMZRkT7T/Whats-App-Image-2026-01-05-at-13-47-56-2.jpg" class="gallery-thumb" alt="X12 Side">
+                                <img src="https://i.ibb.co/DHhDGNnc/Whats-App-Image-2026-01-05-at-13-47-57-1.jpg" class="gallery-thumb" alt="X12 Detail">
+                                <img src="https://i.ibb.co/1GNvsx1m/Whats-App-Image-2026-01-05-at-13-47-57.jpg" class="gallery-thumb" alt="X12 Rear">
+                            </div>
+                            <h4 class="font-sync text-[10px] text-primary mb-4 uppercase tracking-widest font-black">Performance Bruta</h4>
+                            <p class="text-[10px] text-dark/40 uppercase mb-6 font-bold tracking-tighter">A scooter mais desejada de Curitiba agora com fotos reais.</p>
+                            <button onclick="toggleShowroom(true)" class="w-full py-5 bg-dark text-white rounded-2xl font-sync text-[10px] uppercase tracking-[0.2em] hover:bg-primary transition-all">SHOWROOM 3D INTERATIVO</button>
+                        </div>
+                    </div>
+
+                    <!-- Produto 02: CITYCOCO PADRÃO -->
+                    <div class="w-screen h-screen flex-shrink-0 flex flex-col items-center justify-center p-20 relative product-slide" data-model="model2">
+                        <div class="z-10 text-center mt-auto mb-10">
+                            <h2 class="font-sync text-6xl md:text-[8rem] tracking-tighter italic text-primary">CITYCOCO <br> <span class="text-dark outline-text !-webkit-text-stroke-dark opacity-10">MASTER</span></h2>
+                        </div>
+                        <div class="spec-card">
+                            <div class="mini-gallery">
+                                <img src="https://i.ibb.co/RTWhNbk0/Whats-App-Image-2026-01-05-at-13-51-41-2.jpg" class="gallery-thumb" alt="CC 1">
+                                <img src="https://i.ibb.co/Mk93Djrd/Whats-App-Image-2026-01-05-at-13-51-21.jpg" class="gallery-thumb" alt="CC 2">
+                                <img src="https://i.ibb.co/20p0Wgqz/Whats-App-Image-2026-01-05-at-13-51-20.jpg" class="gallery-thumb" alt="CC 3">
+                                <img src="https://i.ibb.co/6JF8LKdN/Whats-App-Image-2026-01-05-at-13-51-19-1.jpg" class="gallery-thumb" alt="CC 4">
+                            </div>
+                            <h4 class="font-sync text-[10px] text-primary mb-4 uppercase tracking-widest font-black">Conforto Urbano</h4>
+                            <button onclick="toggleShowroom(true)" class="w-full py-5 border-2 border-primary text-primary rounded-2xl font-sync text-[10px] uppercase tracking-[0.2em] hover:bg-primary hover:text-white transition-all">ABRIR SHOWROOM</button>
+                        </div>
+                    </div>
+
+                    <!-- Produto 03: BICICLETA ELÉTRICA -->
+                    <div class="w-screen h-screen flex-shrink-0 flex flex-col items-center justify-center p-20 relative product-slide" data-model="model5">
+                         <div class="z-10 text-center mt-auto mb-10">
+                            <h2 class="font-sync text-6xl md:text-[8rem] tracking-tighter italic text-dark uppercase">BIKE <br> <span class="text-primary">ULTIMATE</span></h2>
+                        </div>
+                        <div class="spec-card">
+                            <div class="mini-gallery">
+                                <img src="https://i.ibb.co/ccZxzd0M/Whats-App-Image-2026-01-05-at-13-51-29.jpg" class="gallery-thumb" alt="Bike 1">
+                                <img src="https://i.ibb.co/s9smCTb4/Whats-App-Image-2026-01-05-at-13-51-28.jpg" class="gallery-thumb" alt="Bike 2">
+                                <img src="https://i.ibb.co/LXKmt9LW/Whats-App-Image-2026-01-05-at-13-51-28-2.jpg" class="gallery-thumb" alt="Bike 3">
+                                <img src="https://i.ibb.co/Fqq0LncS/Whats-App-Image-2026-01-05-at-13-51-30-1.jpg" class="gallery-thumb" alt="Bike 4">
+                            </div>
+                            <h4 class="font-sync text-[10px] text-primary mb-4 uppercase tracking-widest font-black">Elite Pedaling</h4>
+                            <button onclick="toggleShowroom(true)" class="w-full py-5 bg-dark text-white rounded-2xl font-sync text-[10px] uppercase tracking-[0.2em] hover:bg-primary transition-all">CONFERIR EM 3D</button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <section class="panel bg-dark text-white flex flex-col gap-12" id="final-cta">
+            <div class="relative z-10 text-center max-w-5xl px-12">
+                <h2 class="font-sync text-5xl md:text-8xl tracking-tighter mb-12 italic">AGENDAR <br> <span class="text-primary italic italic">TEST-DRIVE.</span></h2>
+                <a href="https://wa.me/554130240022" class="px-20 py-10 bg-primary text-white rounded-full font-sync text-xs hover:scale-105 shadow-[0_30px_60px_-15px_rgba(0,82,255,0.4)] transition-all uppercase font-bold tracking-[0.2em]">WhatsApp Concierge</a>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        gsap.registerPlugin(ScrollTrigger);
+        lucide.createIcons();
+
+        const modelsConfig = {
+            model1: 'bike.glb',
+            model2: 'bike2.glb',
+            model5: 'bike5.glb'
+        };
+
+        const cursor = document.getElementById('custom-cursor');
+        window.addEventListener('mousemove', (e) => {
+            gsap.to(cursor, { x: e.clientX, y: e.clientY, duration: 0.1 });
+        });
+
+        let scene, camera, renderer, controls, currentBike;
+        let loadedModels = {};
+        const container = document.getElementById('three-container');
+
+        async function init3D() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            container.appendChild(renderer.domElement);
+
+            // CONTROLES DE ÓRBITA (Habilitados mas inicialmente travados)
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.enabled = false; 
+
+            const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            sunLight.position.set(5, 10, 7.5);
+            scene.add(sunLight);
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x0052FF, 1.0));
+
+            camera.position.set(0, 0, 12);
+
+            const loader = new THREE.GLTFLoader();
+            const loadModel = (name, path) => {
+                return new Promise((resolve) => {
+                    loader.load(path, (gltf) => {
+                        const m = gltf.scene;
+                        m.scale.set(7.5, 7.5, 7.5);
+                        m.visible = false;
+                        scene.add(m);
+                        loadedModels[name] = m;
+                        resolve();
+                    }, undefined, () => {
+                        // Fallback
+                        const g = new THREE.IcosahedronGeometry(4, 1);
+                        const mat = new THREE.MeshStandardMaterial({ color: 0x0052FF, wireframe: true });
+                        const m = new THREE.Mesh(g, mat);
+                        m.visible = false;
+                        scene.add(m);
+                        loadedModels[name] = m;
+                        resolve();
+                    });
+                });
+            };
+
+            await loadModel('model1', modelsConfig.model1);
+            currentBike = loadedModels['model1'];
+            currentBike.visible = true;
+
+            gsap.to("#loader-progress", { width: "100%", duration: 0.5 });
+            gsap.to("#loader", { opacity: 0, pointerEvents: "none", duration: 1 });
+            gsap.to(container, { opacity: 1, duration: 2 });
+
+            startAnimations();
+            loadModel('model2', modelsConfig.model2);
+            loadModel('model5', modelsConfig.model5);
+
+            function animate() {
+                requestAnimationFrame(animate);
+                if (currentBike && !controls.enabled) currentBike.rotation.y += 0.003;
+                if (controls.enabled) controls.update();
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+
+        function switchModel(modelName) {
+            if (!loadedModels[modelName] || loadedModels[modelName] === currentBike) return;
+            const oldModel = currentBike;
+            const newModel = loadedModels[modelName];
+            gsap.to(oldModel.scale, { x: 0, y: 0, z: 0, duration: 0.6 });
+            setTimeout(() => { oldModel.visible = false; }, 600);
+            newModel.visible = true;
+            newModel.scale.set(0, 0, 0);
+            gsap.to(newModel.scale, { x: 7.5, y: 7.5, z: 7.5, duration: 0.8 });
+            currentBike = newModel;
+        }
+
+        // LÓGICA DO SHOWROOM
+        function toggleShowroom(activate) {
+            if (activate) {
+                document.body.classList.add('interactive-3d');
+                controls.enabled = true;
+                gsap.to(camera.position, { z: 8, duration: 1.5, ease: "power4.out" });
+                gsap.to("#main-nav", { opacity: 0, pointerEvents: "none", duration: 0.5 });
+            } else {
+                document.body.classList.remove('interactive-3d');
+                controls.enabled = false;
+                gsap.to(camera.position, { x: 0, y: 0, z: 12, duration: 1.5, ease: "power4.inOut" });
+                gsap.to("#main-nav", { opacity: 1, pointerEvents: "auto", duration: 0.5 });
+            }
+        }
+
+        function startAnimations() {
+            gsap.set(currentBike.position, { y: -1, x: 0 });
+
+            const scroller = document.getElementById('horizontal-scroller');
+            const slides = gsap.utils.toArray('.product-slide');
+
+            ScrollTrigger.create({
+                trigger: "#catalog-trigger",
+                start: "top top",
+                end: () => "+=" + (scroller.scrollWidth * 2.5), 
+                pin: true,
+                scrub: 1,
+                onUpdate: (self) => {
+                    // Se estiver no showroom, o scroll não deve afetar a posição
+                    if (document.body.classList.contains('interactive-3d')) return;
+
+                    const scrollValue = -self.progress * (scroller.scrollWidth - window.innerWidth);
+                    gsap.to(scroller, { x: scrollValue, duration: 0 });
+                    
+                    const activeSlideIndex = Math.min(Math.floor(self.progress * slides.length), slides.length - 1);
+                    slides.forEach((s, i) => i === activeSlideIndex ? s.classList.add('active') : s.classList.remove('active'));
+
+                    const targetModel = slides[activeSlideIndex].getAttribute('data-model');
+                    switchModel(targetModel);
+
+                    if(currentBike) {
+                        currentBike.rotation.y = self.progress * Math.PI * 8;
+                        currentBike.position.y = Math.sin(self.progress * 20) * 0.2;
+                    }
+                }
+            });
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.onload = init3D;
+
+    </script>
+</body>
+</html>
